@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
   char http_200_ok[24] = "HTTP/1.1 200 OK\r\n\r\n";
   char http_404_not_found[24] = "HTTP/1.1 404 OK\r\n\r\n";
 
-  send(client_fd, file_found ? &http_200_ok : &http_400_not_found, sizeof(http_200_ok), 0);
+  send(client_fd, file_found ? &http_200_ok : &http_404_not_found, sizeof(http_200_ok), 0);
 
   close(client_fd);
   close(server_fd);
