@@ -78,7 +78,7 @@ int main(int argc, char **argv) {
   bool file_found = file_exists(target);
 
   char http_200_ok[24] = "HTTP/1.1 200 OK\r\n\r\n";
-  char http_400_not_found[24] = "HTTP/1.1 400 OK\r\n\r\n";
+  char http_404_not_found[24] = "HTTP/1.1 404 OK\r\n\r\n";
 
   send(client_fd, file_found ? &http_200_ok : &http_400_not_found, sizeof(http_200_ok), 0);
 
