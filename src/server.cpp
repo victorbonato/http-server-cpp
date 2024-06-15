@@ -1,12 +1,23 @@
 #include <arpa/inet.h>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <netdb.h>
+#include <sstream>
 #include <string>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+struct http_request_line {
+  std::string method;
+  std::string target;
+  std::string http_version;
+};
+
+struct http_request_line process_request_line(std::string request_string);
+bool file_exists(std::string target);
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -58,11 +69,45 @@ int main(int argc, char **argv) {
                          (socklen_t *)&client_addr_len);
   std::cout << "Client connected\n";
 
-  char http_200_ok[24] = "HTTP/1.1 200 OK\r\n\r\n";
-  send(client_fd, &http_200_ok, sizeof(http_200_ok), 0);
-  close(client_fd);
+  char buffer[1024];
+  read(client_fd, &buffer, sizeof(buffer));
+  std::string request(buffer);
+  struct http_request_line processed_request_line = process_request_line(request);
 
+  std::string target = processed_request_line.target;
+  bool file_found = file_exists(target);
+
+  char http_200_ok[24] = "HTTP/1.1 200 OK\r\n\r\n";
+  char http_400_not_found[24] = "HTTP/1.1 400 OK\r\n\r\n";
+
+  send(client_fd, file_found ? &http_200_ok : &http_400_not_found, sizeof(http_200_ok), 0);
+
+  close(client_fd);
   close(server_fd);
 
   return 0;
+}
+
+
+struct http_request_line process_request_line(std::string request_string) {
+  std::istringstream request_stream(request_string);
+  std::string request_line;
+  std::getline(request_stream, request_line);
+
+  struct http_request_line request;
+  std::istringstream request_line_stream(request_line);
+
+  std::getline(request_line_stream, request.method, ' ');
+  std::getline(request_line_stream, request.target, ' ');
+  std::getline(request_line_stream, request.http_version, '\r');
+
+  return request;
+}
+
+bool file_exists(std::string target) {
+  if (target == "/") return true;
+
+  std::filesystem::path target_path = "files" + target;
+
+  return (std::filesystem::exists(target_path)) ? true : false;
 }
