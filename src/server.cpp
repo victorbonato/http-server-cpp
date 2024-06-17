@@ -169,7 +169,7 @@ int main(int argc, char** argv)
     if (request.target == "/") {
         response = Response(200, std::vector<std::string> {}, "");
     } else if (request.target.rfind(echo, 0) == 0) {
-        response = Response(200, std::vector<std::string> {}, request.target.substr(echo.length()));
+        response = Response(200, std::vector<std::string> {}, request.target.substr(echo.length() + 1));
     } else {
         response = Response(404, std::vector<std::string> {}, "");
     }
