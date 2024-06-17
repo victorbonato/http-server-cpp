@@ -176,6 +176,9 @@ int main(int argc, char** argv)
 
     std::string response_string = response.to_string();
 
+    std::clog << "Response: \n"
+              << response_string << std::endl;
+
     send(client_fd, response_string.c_str(), response_string.size(), 0);
 
     close(client_fd);
