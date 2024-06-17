@@ -45,8 +45,8 @@ public:
     std::string body;
 
     std::map<int, std::string> status_to_response = {
-        { 200, "HTTP/1.1 200 OK\r\n\r\n" },
-        { 404, "HTTP/1.1 404 Not Found\r\n\r\n" }
+        { 200, "HTTP/1.1 200 OK\r\n" },
+        { 404, "HTTP/1.1 404 Not Found\r\n" }
 
     };
 
