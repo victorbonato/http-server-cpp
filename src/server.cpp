@@ -1,17 +1,87 @@
+#include <algorithm>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <iostream>
+#include <map>
+#include <netdb.h>
 #include <sstream>
 #include <string>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <vector>
 
-struct http_request_line process_request_line(std::string request_string);
+class Request {
+public:
+    std::string method;
+    std::string target;
+    std::string http_version;
+    std::vector<std::string> headers;
+
+    Request(std::string message)
+    {
+        std::istringstream message_stream(message);
+
+        std::string status_line;
+        std::getline(message_stream, status_line);
+        std::istringstream status_line_stream(status_line);
+        std::getline(status_line_stream, this->method, ' ');
+        std::getline(status_line_stream, this->target, ' ');
+        std::getline(status_line_stream, this->http_version, '\r');
+
+        std::string header;
+        while (std::getline(message_stream, header)) {
+            this->headers.push_back(header);
+        }
+    }
+};
+
+class Response {
+public:
+    std::string status_line;
+    std::vector<std::string> headers;
+    std::string body;
+
+    std::map<int, std::string> status_to_response = {
+        { 200, "HTTP/1.1 200 OK\r\n\r\n" },
+        { 404, "HTTP/1.1 404 Not Found\r\n\r\n" }
+
+    };
+
+    Response() { }
+
+    Response(int status, std::vector<std::string> extra_headers, std::string body)
+    {
+        this->status_line = status_to_response[status];
+        this->headers.push_back("Content-Type: text/plain\r\n");
+        std::stringstream cont_len_stream;
+        cont_len_stream << "Content-Length: " << body.size() << "\r\n";
+        this->headers.push_back(cont_len_stream.str());
+
+        for (std::string& header : extra_headers) {
+            this->headers.push_back(header);
+        }
+        this->headers.push_back("\r\n");
+
+        this->body = body;
+    }
+
+    std::string to_string()
+    {
+        std::string result;
+
+        result += status_line;
+        for (std::string header : this->headers) {
+            result += header;
+        }
+        result += body;
+
+        return result;
+    }
+};
+
 bool file_exists(std::string target);
 
 int main(int argc, char** argv)
@@ -86,11 +156,27 @@ int main(int argc, char** argv)
     std::cerr << "Client Message (length: " << client_msg.size() << ")" << std::endl;
     std::clog << client_msg << std::endl;
 
-    std::string response = client_msg.rfind("GET / HTTP/1.1\r\n") == 0 ? "HTTP/1.1 200 OK\r\n\r\n" : "HTTP/1.1 404 Not Found\r\n\r\n";
+    // Create request object
+    Request request = Request(client_msg);
 
-    // bool file_found = file_exists(target);
+    std::map<int, std::string> status_to_response;
+    status_to_response[200] = "HTTP/1.1 200 OK\r\n\r\n";
+    status_to_response[404] = "HTTP/1.1 404 Not Found\r\n\r\n";
 
-    send(client_fd, response.c_str(), response.size(), 0);
+    Response response;
+
+    std::string echo = "/echo";
+    if (request.target == "/") {
+        response = Response(200, std::vector<std::string> {}, "");
+    } else if (request.target.rfind(echo, 0) == 0) {
+        response = Response(200, std::vector<std::string> {}, request.target.substr(echo.length()));
+    } else {
+        response = Response(404, std::vector<std::string> {}, "");
+    }
+
+    std::string response_string = response.to_string();
+
+    send(client_fd, response_string.c_str(), response_string.size(), 0);
 
     close(client_fd);
     close(server_fd);
