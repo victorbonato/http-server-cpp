@@ -18,22 +18,27 @@ public:
     std::string method;
     std::string target;
     std::string http_version;
-    std::vector<std::string> headers;
+    std::map<std::string, std::string> headers;
 
     Request(std::string message)
     {
         std::istringstream message_stream(message);
 
         std::string status_line;
-        std::getline(message_stream, status_line);
+        std::getline(message_stream, status_line) >> std::ws;
         std::istringstream status_line_stream(status_line);
         std::getline(status_line_stream, this->method, ' ');
         std::getline(status_line_stream, this->target, ' ');
         std::getline(status_line_stream, this->http_version, '\r');
 
         std::string header;
-        while (std::getline(message_stream, header)) {
-            this->headers.push_back(header);
+        while (std::getline(message_stream, header) >> std::ws) {
+            std::istringstream header_stream(header);
+            std::string header_key, header_value;
+            std::getline(header_stream, header_key, ':');
+            std::getline(header_stream >> std::ws, header_value, '\r');
+
+            this->headers.insert(std::pair<std::string, std::string>(header_key, header_value));
         }
     }
 };
@@ -41,29 +46,25 @@ public:
 class Response {
 public:
     std::string status_line;
-    std::vector<std::string> headers;
+    std::vector<std::pair<std::string, std::string>> headers;
     std::string body;
 
     std::map<int, std::string> status_to_response = {
         { 200, "HTTP/1.1 200 OK\r\n" },
         { 404, "HTTP/1.1 404 Not Found\r\n" }
-
     };
 
     Response() { }
 
-    Response(int status, std::vector<std::string> extra_headers, std::string body)
+    Response(int status, std::vector<std::pair<std::string, std::string>> extra_headers, std::string body)
     {
         this->status_line = status_to_response[status];
-        this->headers.push_back("Content-Type: text/plain\r\n");
-        std::stringstream cont_len_stream;
-        cont_len_stream << "Content-Length: " << body.size() << "\r\n";
-        this->headers.push_back(cont_len_stream.str());
+        this->headers.push_back(std::pair<std::string, std::string>("Content-Type", "text/plain"));
+        this->headers.push_back(std::pair<std::string, std::string>("Content-Length", std::to_string(body.size())));
 
-        for (std::string& header : extra_headers) {
-            this->headers.push_back(header);
+        for (std::pair<std::string, std::string>& header : extra_headers) {
+            this->headers.push_back(std::pair<std::string, std::string>(header.first, header.second));
         }
-        this->headers.push_back("\r\n");
 
         this->body = body;
     }
@@ -73,9 +74,10 @@ public:
         std::string result;
 
         result += status_line;
-        for (std::string header : this->headers) {
-            result += header;
+        for (std::pair<std::string, std::string> header : this->headers) {
+            result += header.first + ": " + header.second + "\r\n";
         }
+        result += "\r\n";
         result += body;
 
         return result;
@@ -159,19 +161,21 @@ int main(int argc, char** argv)
     // Create request object
     Request request = Request(client_msg);
 
-    std::map<int, std::string> status_to_response;
-    status_to_response[200] = "HTTP/1.1 200 OK\r\n\r\n";
-    status_to_response[404] = "HTTP/1.1 404 Not Found\r\n\r\n";
-
     Response response;
 
-    std::string echo = "/echo";
+    std::vector<std::pair<std::string, std::string>> extra_headers;
+
+    std::string prefix_echo = "/echo";
+    std::string prefix_user_agent = "/user-agent";
     if (request.target == "/") {
-        response = Response(200, std::vector<std::string> {}, "");
-    } else if (request.target.rfind(echo, 0) == 0) {
-        response = Response(200, std::vector<std::string> {}, request.target.substr(echo.length() + 1));
+        response = Response(200, extra_headers, "");
+    } else if (request.target.rfind(prefix_echo, 0) == 0) {
+        response = Response(200, extra_headers, request.target.substr(prefix_echo.length() + 1));
+    } else if (request.target.rfind(prefix_user_agent, 0) == 0) {
+        std::string user_agent = request.headers["User-Agent"];
+        response = Response(200, extra_headers, user_agent);
     } else {
-        response = Response(404, std::vector<std::string> {}, "");
+        response = Response(404, extra_headers, "");
     }
 
     std::string response_string = response.to_string();
